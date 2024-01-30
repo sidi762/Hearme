@@ -3,6 +3,7 @@ The decoder module, responsible for decoding the carrier audio signal to text.
 Liang Sidi, 2024
 '''
 import wave
+import gzip
 import numpy as np
 
 class Demodulator:
@@ -22,16 +23,18 @@ class Demodulator:
         binary_to_string(self, binary_data): Converts binary data to text.
         demodulate(self, signal, mode=1): Demodulates the signal to text.
     """
-    def __init__(self, carrier_freq=2000, sample_rate=44100, bit_duration=0.1):
+    def __init__(self, carrier_freq=2200, sample_rate=44100, bit_duration=0.1, bandwidth=2200):
         """Initialize the demodulator with specified parameters.
         Parameters:
             carrier_freq (int, default=2000): The frequency of the carrier signal in Hz.
             sample_rate (int, default=44100): The sampling rate in Hz.
             bit_duration (float, default=0.1): The duration of each bit in seconds.
+            bandwidth (int, default=2200): The bandwidth of the signal in Hz.
         """
         self.carrier_freq = carrier_freq
         self.sample_rate = sample_rate
         self.bit_duration = bit_duration
+        self.bandwidth = bandwidth
 
     def read_from_wav(self, filename):
         """Read a signal from a WAV file.
@@ -68,25 +71,28 @@ class Demodulator:
             start = i * num_samples_per_bit
             end = start + num_samples_per_bit
             bit_slice = signal[start:end]
-            t = np.linspace(start / self.sample_rate, 
-                            end / self.sample_rate, 
-                            num_samples_per_bit, 
+            t = np.linspace(start / self.sample_rate,
+                            end / self.sample_rate,
+                            end - start,
                             endpoint=False)
-            reference_signal = np.cos(2 * np.pi * self.carrier_freq * t)
+            reference_signal = np.cos(2 * np.pi * 2 * self.carrier_freq * t)
             product = np.mean(bit_slice * reference_signal)
             binary_data += '1' if product > 0 else '0'
 
         return binary_data
 
-    def binary_to_string(self, binary_data):
+    def binary_to_string(self, binary_data, gzip_enabled=True):
         """Convert binary data to text.
         Parameters:
             binary_data(str): The binary data to be converted.
+            gzip_enabled(bool, default=True): Whether to use gzip compression.
         Returns:
             The text.
         """
-        text = ''.join(chr(int(binary_data[i:i+8], 2)) for i in range(0, len(binary_data), 8))
-        return text
+        byte_array = bytearray(int(binary_data[i:i+8], 2) for i in range(0, len(binary_data), 8))
+        if gzip_enabled:
+            byte_array = gzip.decompress(byte_array)
+        return byte_array.decode('utf-8', errors='ignore')
 
     def demodulate(self, signal, mode=1):
         """Demodulate the signal to text.
