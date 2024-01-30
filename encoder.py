@@ -2,8 +2,8 @@
 Liang Sidi, 2024
 """
 import wave
+import gzip
 import numpy as np
-import matplotlib.pyplot as plt # For debugging
 
 class Modulator:
     """Class for modulating text to carrier audio signals.
@@ -21,25 +21,36 @@ class Modulator:
         modulate(self, text, mode=1): Modulates text to carrier audio signal.
         save_to_wav(self, signal, filename="output.wav"): Saves the signal to a WAV file.    
     """
-    def __init__(self, carrier_freq=1000, sample_rate=44100, bit_duration=0.1):
+    def __init__(self, carrier_freq=2200, sample_rate=44100, bit_duration=0.1, bandwidth=2200):
         """Initializes the modulator.
         Parameters:
-            carrier_freq(int, default=1000): The frequency of the carrier signal in Hz.
+            carrier_freq(int, default=2000): The frequency of the carrier signal in Hz.
             sample_rate(int, default=44100): The sampling rate in Hz.
             bit_duration(float, default=0.1): The duration of each bit in seconds.
+            bandwidth(int, default=2200): The bandwidth of the signal in Hz.
         """
         self.carrier_freq = carrier_freq
         self.sample_rate = sample_rate
         self.bit_duration = bit_duration
-
-    def string_to_binary(self, text):
+        self.bandwidth = bandwidth
+    
+    def string_to_binary(self, text, gzip_enabled=True):
         """Converts text to binary data.
         Parameters:
             text(str): The text to be converted.
+            gzip_enabled(bool, default=True): Whether to compress the binary data using GZIP.
         Returns:
             The binary data.
         """
-        return ''.join(format(ord(c), '08b') for c in text)
+        binary_data = ''.join(format(byte, '08b') for byte in text.encode('utf-8'))
+        # print(binary_data)
+        if gzip_enabled:
+            data_bytes = int(binary_data, 2).to_bytes((len(binary_data) + 7) // 8, byteorder='big')
+            compressed_data = gzip.compress(data_bytes)
+            binary_data = ''.join(format(byte, '08b') for byte in compressed_data)
+            # print(binary_data)
+           
+        return binary_data
 
     def bpsk_modulate(self, binary_data):
         """Modulates binary data to BPSK signal.
@@ -54,9 +65,9 @@ class Modulator:
             phase = np.pi if bit == '1' else 0
             start = int(i * self.sample_rate * self.bit_duration)
             end = int((i + 1) * self.sample_rate * self.bit_duration)
-            t = np.linspace(start / self.sample_rate, 
-                            end / self.sample_rate, 
-                            end - start, 
+            t = np.linspace(start / self.sample_rate,
+                            end / self.sample_rate,
+                            end - start,
                             endpoint=False)
             signal[start:end] = np.cos(2 * np.pi * self.carrier_freq * t + phase)
         return t, signal
