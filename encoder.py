@@ -52,6 +52,51 @@ class Modulator:
            
         return binary_data
 
+    def mfsk_modulate(self, binary_data, M=64):
+        """Modulates binary data to MFSK signal.
+        Parameters:
+            binary_data(str): The binary data to be modulated.
+            M(int, default=64): The M in MFSK, representing the number of different frequencies.
+        Returns:
+            The modulated signal.
+        """
+        # Number of bits per symbol (e.g., M=4 means 2 bits per symbol for 4-FSK)
+        bits_per_symbol = int(np.log2(M))
+
+        # Calculate the number of symbols
+        num_symbols = int(len(binary_data) / bits_per_symbol)
+
+        # Frequencies for each symbol
+        # symbol_freqs = np.linspace(self.carrier_freq - M*440/2, self.carrier_freq + M*440/2, M)
+        symbol_freqs = np.linspace(self.carrier_freq - self.bandwidth/2,
+                                   self.carrier_freq + self.bandwidth/2,
+                                   M)
+
+        # Create the signal array
+        num_samples = int(num_symbols * self.sample_rate * self.bit_duration)
+        signal = np.zeros(num_samples)
+
+        for i in range(num_symbols):
+            # Extract the bits for this symbol
+            symbol_bits = binary_data[i*bits_per_symbol:(i+1)*bits_per_symbol]
+
+            # Convert bits to a decimal symbol
+            symbol = int(symbol_bits, 2)
+
+            # Frequency for this symbol
+            freq = symbol_freqs[symbol]
+            # print(freq)
+            # Generate the signal for this symbol
+            start = int(i * self.sample_rate * self.bit_duration)
+            end = int((i + 1) * self.sample_rate * self.bit_duration)
+            t = np.linspace(start / self.sample_rate,
+                            end / self.sample_rate,
+                            end - start,
+                            endpoint=False)
+            signal[start:end] = np.cos(2 * np.pi * freq * t)
+
+        return t, signal
+
     def bpsk_modulate(self, binary_data):
         """Modulates binary data to BPSK signal.
         Parameters:
@@ -72,29 +117,38 @@ class Modulator:
             signal[start:end] = np.cos(2 * np.pi * self.carrier_freq * t + phase)
         return t, signal
 
-    def modulate(self, text, mode=1):
+    def modulate(self, text, mode=2, compression_enabled=True):
         """Modulates text to carrier audio signal.
         Parameters: 
             text(str): The text to be modulated.
-            mode(int, default=1): The modulation mode. Currently only supports BPSK (1).
+            mode(int, default=2): The modulation mode. 
+                                  Currently only supports BPSK (1), 64-FSK (2).
+            compression_enabled(bool, default=True): Whether to compress the binary data using GZIP.
         Returns:
             The modulated signal.
         """
+        binary_data = self.string_to_binary(text, gzip_enabled=compression_enabled)
         if mode == 1:
-            binary_data = self.string_to_binary(text)
             return self.bpsk_modulate(binary_data)
+        elif mode == 2:
+            return self.mfsk_modulate(binary_data) # 64-FSK
         else:
             return None
 
     # Add more modulation methods here in future.
-    def save_to_wav(self, signal, filename="output.wav"):
+    def save_to_wav(self, signal, filename="output.wav", add_gaussian_noise=False):
         """Save the signal to a WAV file.
         Parameters:
             signal: The signal to save.
             filename(str, default="output.wav"): The name of the file to save to.
+            add_gaussian_noise(bool, default=False): Whether to add Gaussian noise (for testing) to the signal.
         """
+        if add_gaussian_noise:
+            noise = np.random.normal(0, 1, len(signal)).astype(np.int16)
+            signal += noise
         # Normalizing the signal to fit in the 16-bit range
         normalized_signal = np.int16((signal / signal.max()) * 32767)
+
 
         # Open a WAV file for writing
         with wave.open(filename, 'w') as wav_file:
@@ -109,29 +163,23 @@ class Modulator:
         print(f"File saved as {filename}")
 
 
+
 # Example usage
 modulator = Modulator()
-t, signal = modulator.modulate("The quick brown fox jumps over the lazy dog.")
-
-modulator.save_to_wav(signal, "hello_world_bpsk.wav")
-
-# Displaying the first 10 bits of the signal
-# Number of bits to display in the plot
-num_bits_to_display = 10
-
-# Calculate the number of samples to display
-samples_to_display = int(num_bits_to_display * modulator.bit_duration * modulator.sample_rate)
-
-# Adjust the time and signal arrays to only include the desired number of samples
-t_short = t[0:1024]
-signal_short = signal[0:1024]
+# text_to_encode = "The quick brown fox jumps over the lazy dog."
+text_to_encode = "The quick brown fox jumps over the lazy dog. \n\
+                  天地玄黄，宇宙洪荒，日月盈仄，辰宿列张，\n\
+                  寒来暑往，秋收冬藏，闰余成岁，律吕调阳。"
+_, signal = modulator.modulate(text_to_encode, mode=2, compression_enabled=False)
+modulator.save_to_wav(signal, "hello_world_64fsk.wav", add_gaussian_noise=True)
+modulator.save_to_wav(signal, "hello_world_64fsk_gaussian.wav", add_gaussian_noise=True)
+_, signal_gz = modulator.modulate(text_to_encode, mode=2, compression_enabled=True)
+modulator.save_to_wav(signal_gz, "hello_world_64fsk_gaussian_gzip.wav", add_gaussian_noise=True)
 
 
-# Plotting the shortened signal
-plt.figure(figsize=(15, 4))
-plt.plot(t_short, signal_short)
-plt.xlabel('Time (s)')
-plt.ylabel('Amplitude')
-plt.title(f'BPSK Modulated Signal of "Hello World" (First {num_bits_to_display} bits)')
-plt.grid(True)
-plt.show()
+_, signal_bpsk = modulator.modulate(text_to_encode, mode=1, compression_enabled=False)
+modulator.save_to_wav(signal_bpsk, "hello_world_bpsk.wav")
+modulator.save_to_wav(signal_bpsk, "hello_world_bpsk_gaussian.wav", add_gaussian_noise=True)
+_, signal_bpsk_gz = modulator.modulate(text_to_encode, mode=1, compression_enabled=True)
+modulator.save_to_wav(signal_bpsk_gz, "hello_world_bpsk_gaussian_gzip.wav", add_gaussian_noise=True)
+
