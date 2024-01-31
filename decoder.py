@@ -12,29 +12,52 @@ class Demodulator:
         carrier_freq (int): The frequency of the carrier signal in Hz.
         sample_rate (int): The sampling rate in Hz.
         bit_duration (float): The duration of each bit in seconds.
-
+        bandwidth (int): The bandwidth of the signal in Hz.
+        modulation_mode (int): The modulation mode. 1 for BPSK, 2
+                               for MFSK.
+        m_for_mfsk (int): The M in MFSK, default to 64-FSK. Must be a power of 2.
+        compression_enabled (bool): Whether to use gzip compression.
+        
     Methods:
         __init__(self, 
                 carrier_freq=2000, 
                 sample_rate=44100, 
-                bit_duration=0.1): Initializes the demodulator.
+                bit_duration=0.01,
+                bandwidth=2000,
+                modulation_mode=2,
+                m_for_mfsk=64,
+                compression_enabled=True): Initializes the demodulator.
         read_from_wav(self, filename): Reads a signal from a WAV file.
-        bpsk_demodulate(self, signal): Demodulates the BPSK signal to binary data.
-        binary_to_string(self, binary_data): Converts binary data to text.
+        get_text(self, signal): Recovers text from a signal.
+        __bpsk_demodulate(self, signal): Demodulates the BPSK signal to binary data.
+        __mfsk_demodulate(self, signal, M=64): Demodulates the MFSK signal to binary data.
+        __binary_to_string(self, binary_data): Converts binary data to text.
         demodulate(self, signal, mode=1): Demodulates the signal to text.
     """
-    def __init__(self, carrier_freq=8800, sample_rate=44100, bit_duration=0.01, bandwidth=4400):
+    def __init__(self, carrier_freq=8800, sample_rate=44100,
+                 bit_duration=0.01, bandwidth=4400, modulation_mode=2,
+                 m_for_mfsk=64, compression_enabled=True):
         """Initialize the demodulator with specified parameters.
         Parameters:
             carrier_freq (int, default=8800): The frequency of the carrier signal in Hz.
             sample_rate (int, default=44100): The sampling rate in Hz.
             bit_duration (float, default=0.01): The duration of each bit in seconds.
             bandwidth (int, default=4400): The bandwidth of the signal in Hz.
+            modulation_mode (int, default=2): The modulation mode.
+                                              1 for BPSK, 2 for MFSK.
+            m_for_mfsk (int, default=64): The M in MFSK, default to 64-FSK. 
+                                          Must be a power of 2.
+            compression_enabled (bool, default=True): Whether to use gzip compression.
         """
         self.carrier_freq = carrier_freq
         self.sample_rate = sample_rate
         self.bit_duration = bit_duration
         self.bandwidth = bandwidth
+        self.modulation_mode = modulation_mode
+        # Check is M is a power of 2
+        assert m_for_mfsk & (m_for_mfsk - 1) == 0 and m_for_mfsk != 0, "M must be a power of 2"
+        self.m_for_mfsk = m_for_mfsk
+        self.compression_enabled = compression_enabled
 
     def read_from_wav(self, filename):
         """Read a signal from a WAV file.
@@ -56,7 +79,17 @@ class Demodulator:
         # Normalize the signal
         return signal / max(abs(signal))
 
-    def mfsk_demodulate(self, signal, M=64):
+    def get_text(self, signal):
+        """Recover text from a signal.
+        Parameters:
+            signal (np.array): The signal to recover text from.
+        Returns:
+            The text.
+        """
+        binary_data = self.__demodulate(signal)
+        return self.__binary_to_string(binary_data, gzip_enabled=self.compression_enabled)
+
+    def __mfsk_demodulate(self, signal, M=64):
         """Demodulate the MFSK signal to binary data.
         Parameters: 
             signal (np.array): The signal to demodulate.
@@ -101,7 +134,7 @@ class Demodulator:
 
         return binary_data
 
-    def bpsk_demodulate(self, signal):
+    def __bpsk_demodulate(self, signal):
         """Demodulate the BPSK signal to binary data.
         Parameters: 
             signal (np.array): The signal to demodulate.
@@ -126,7 +159,7 @@ class Demodulator:
 
         return binary_data
 
-    def binary_to_string(self, binary_data, gzip_enabled=True):
+    def __binary_to_string(self, binary_data, gzip_enabled=True):
         """Convert binary data to text.
         Parameters:
             binary_data(str): The binary data to be converted.
@@ -139,24 +172,38 @@ class Demodulator:
             byte_array = gzip.decompress(byte_array)
         return byte_array.decode('utf-8', errors='ignore')
 
+    def __demodulate(self, signal):
+        """Demodulate the signal to binary data.
+        Parameters:
+            signal(np.array): The signal to demodulate.
+        Returns:
+            The binary data.
+        """
+        if self.modulation_mode == 1:
+            return self.__bpsk_demodulate(signal)
+        if self.modulation_mode == 2:
+            return self.__mfsk_demodulate(signal, M=self.m_for_mfsk)
+        return None
+
     def demodulate(self, signal, mode=2, compression_enabled=True):
         """Demodulate the signal to text.
         Parameters:
             signal(np.array): The signal to demodulate.
             mode(int, default=2): The demodulation mode. 
                                   Currently only supports BPSK (1), 64-FSK (2).
-            compression_enabled(bool, default=True): Whether to decompress the binary data using GZIP.
+            compression_enabled(bool, default=True): Whether to decompress the 
+                                                     binary data using GZIP.
         Returns:
             The text.
         """
         if mode == 1:
-            binary_data = self.bpsk_demodulate(signal)
+            binary_data = self.__bpsk_demodulate(signal)
         elif mode == 2:
-            binary_data = self.mfsk_demodulate(signal) # 64-FSK
+            binary_data = self.__mfsk_demodulate(signal) # 64-FSK
         else:
             # Not Implemented
             return None
-        return self.binary_to_string(binary_data, gzip_enabled=compression_enabled)
+        return self.__binary_to_string(binary_data, gzip_enabled=compression_enabled)
 
 
 # Example usage
