@@ -169,7 +169,10 @@ class Demodulator:
         """
         byte_array = bytearray(int(binary_data[i:i+8], 2) for i in range(0, len(binary_data), 8))
         if gzip_enabled:
-            byte_array = gzip.decompress(byte_array)
+            try:
+                byte_array = gzip.decompress(byte_array)
+            except gzip.BadGzipFile:
+                return "Decompression failed. Data could be corrupted."
         return byte_array.decode('utf-8', errors='ignore')
 
     def __demodulate(self, signal):
@@ -207,31 +210,31 @@ class Demodulator:
 
 
 # Example usage
-demodulator = Demodulator()
-signal_64fsk = demodulator.read_from_wav("hello_world_64fsk.wav")
-decoded_text_64fsk = demodulator.demodulate(signal_64fsk, compression_enabled=False)
-print("64-FSK: \n", decoded_text_64fsk)
+# demodulator = Demodulator()
+# signal_64fsk = demodulator.read_from_wav("hello_world_64fsk.wav")
+# decoded_text_64fsk = demodulator.demodulate(signal_64fsk, compression_enabled=False)
+# print("64-FSK: \n", decoded_text_64fsk)
 
-signal_64fsk_gaussian = demodulator.read_from_wav("hello_world_64fsk_gaussian.wav")
-decoded_text_64fsk_gaussian = demodulator.demodulate(signal_64fsk_gaussian, 
-                                                     compression_enabled=False)
-print("64-FSK with Gaussian Noise: \n", decoded_text_64fsk_gaussian)
+# signal_64fsk_gaussian = demodulator.read_from_wav("hello_world_64fsk_gaussian.wav")
+# decoded_text_64fsk_gaussian = demodulator.demodulate(signal_64fsk_gaussian, 
+#                                                      compression_enabled=False)
+# print("64-FSK with Gaussian Noise: \n", decoded_text_64fsk_gaussian)
 
-signal_64fsk_gaussian_gzip = demodulator.read_from_wav("hello_world_64fsk_gaussian_gzip.wav")
-decoded_text_64fsk_gaussian_gzip = demodulator.demodulate(signal_64fsk_gaussian_gzip)
-print("64-FSK with Gaussian Noise and GZIP: \n", decoded_text_64fsk_gaussian_gzip)
+# signal_64fsk_gaussian_gzip = demodulator.read_from_wav("hello_world_64fsk_gaussian_gzip.wav")
+# decoded_text_64fsk_gaussian_gzip = demodulator.demodulate(signal_64fsk_gaussian_gzip)
+# print("64-FSK with Gaussian Noise and GZIP: \n", decoded_text_64fsk_gaussian_gzip)
 
 
-signal_bpsk = demodulator.read_from_wav("hello_world_bpsk.wav")
-decoded_text_bpsk = demodulator.demodulate(signal_bpsk, mode=1, compression_enabled=False)
-print("BPSK: \n", decoded_text_bpsk)
+# signal_bpsk = demodulator.read_from_wav("hello_world_bpsk.wav")
+# decoded_text_bpsk = demodulator.demodulate(signal_bpsk, mode=1, compression_enabled=False)
+# print("BPSK: \n", decoded_text_bpsk)
 
-signal_bpsk_gaussian = demodulator.read_from_wav("hello_world_bpsk_gaussian.wav")
-decoded_text_bpsk_gaussian = demodulator.demodulate(signal_bpsk_gaussian,
-                                                    mode=1,
-                                                    compression_enabled=False)
-print("BPSK with Gaussian Noise: \n", decoded_text_bpsk_gaussian)
+# signal_bpsk_gaussian = demodulator.read_from_wav("hello_world_bpsk_gaussian.wav")
+# decoded_text_bpsk_gaussian = demodulator.demodulate(signal_bpsk_gaussian,
+#                                                     mode=1,
+#                                                     compression_enabled=False)
+# print("BPSK with Gaussian Noise: \n", decoded_text_bpsk_gaussian)
 
-signal_bpsk_gaussian_gzip = demodulator.read_from_wav("hello_world_bpsk_gaussian_gzip.wav")
-decoded_text_bpsk_gaussian_gzip = demodulator.demodulate(signal_bpsk_gaussian_gzip, mode=1)
-print("BPSK with Gaussian Noise and GZIP: \n", decoded_text_bpsk_gaussian_gzip)
+# signal_bpsk_gaussian_gzip = demodulator.read_from_wav("hello_world_bpsk_gaussian_gzip.wav")
+# decoded_text_bpsk_gaussian_gzip = demodulator.demodulate(signal_bpsk_gaussian_gzip, mode=1)
+# print("BPSK with Gaussian Noise and GZIP: \n", decoded_text_bpsk_gaussian_gzip)
