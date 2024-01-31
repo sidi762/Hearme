@@ -58,17 +58,69 @@ class Modulator:
         assert m_for_mfsk & (m_for_mfsk - 1) == 0 and m_for_mfsk != 0, "M must be a power of 2"
         self.m_for_mfsk = m_for_mfsk
         self.compression_enabled = compression_enabled
+        # Chrip signal frequencies for preamble and postamble
+        # C major scale frequencies (C4 to C6)
+        self.start_chrip_seq = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25,
+                         587.33, 659.25, 698.46, 783.99, 880.00, 987.77, 1046.50]
+        self.end_chrip_seq = self.start_chrip_seq[::-1]
+        self.preamble_duration = 1
+        self.postamble_duration = 1
 
     def generate_signal(self, text):
         """Generates the signal from text.
+        Protocol: Chirp + 0.5s + "HMMSG##<text>" + 0.5s + Chirp + 1s
         Parameters:
             text(str): The text to be modulated.
         Returns:
             The signal.
         """
+        stepped_chirp_start = self.generate_stepped_chirp(self.preamble_duration,
+                                                          self.start_chrip_seq)
+        stepped_chirp_end = self.generate_stepped_chirp(self.postamble_duration,
+                                                        self.end_chrip_seq)
+        text = f"HMMSG##{text}"
         binary_data = self.__string_to_binary(text, gzip_enabled=self.compression_enabled)
-        _, signal = self.__modulate(binary_data)
+        print(binary_data)
+        _, modulated_signal = self.__modulate(binary_data)
+        signal = np.concatenate((stepped_chirp_start, np.zeros(int(self.sample_rate * 0.5)),
+                                    modulated_signal, np.zeros(int(self.sample_rate * 0.5)),
+                                    stepped_chirp_end, np.zeros(self.sample_rate)))
         return signal
+
+    def generate_chirp(self, start_freq, end_freq, duration):
+        """Generates a chirp signal.
+        Parameters:
+            start_freq (float): The starting frequency of the chirp.
+            end_freq (float): The ending frequency of the chirp.
+            duration (float): The duration of the chirp in seconds.
+        Returns:
+            numpy.array: The chirp signal.
+        """
+        t = np.linspace(0, duration, int(self.sample_rate * duration))
+        chirp_signal = np.sin(2 * np.pi * t * np.linspace(start_freq, end_freq, t.size))
+        return chirp_signal
+
+    def generate_stepped_chirp(self, duration, steps):
+        """Generates a stepped chirp signal.
+        Parameters:
+            start_freq (float): The starting frequency of the chirp.
+            end_freq (float): The ending frequency of the chirp.
+            duration (float): The total duration of the chirp in seconds.
+            steps (list): List of frequencies for each step (musical notes).
+        Returns:
+            numpy.array: The chirp signal.
+        """
+        t = np.linspace(0, duration, int(self.sample_rate * duration))
+        chirp_signal = np.zeros_like(t)
+
+        step_duration = duration / len(steps)
+        for i, freq in enumerate(steps):
+            start_idx = int(i * step_duration * self.sample_rate)
+            end_idx = int((i + 1) * step_duration * self.sample_rate)
+            step_t = t[start_idx:end_idx]
+            chirp_signal[start_idx:end_idx] = np.sin(2 * np.pi * freq * step_t)
+
+        return chirp_signal
 
     def __string_to_binary(self, text, gzip_enabled=True):
         """Converts text to binary data.
@@ -210,15 +262,19 @@ class Modulator:
 
         print(f"File saved as {filename}")
 
-
+    
 
 # Example usage
 modulator = Modulator()
+modulator.compression_enabled = False
+modulator.bit_duration = 0.1
 # text_to_encode = "The quick brown fox jumps over the lazy dog."
 TEXT_TO_ENCODE = "The quick brown fox jumps over the lazy dog. \n\
                   天地玄黄，宇宙洪荒，日月盈仄，辰宿列张，\n\
                   寒来暑往，秋收冬藏，闰余成岁，律吕调阳。"
 generated_signal = modulator.generate_signal(TEXT_TO_ENCODE)
+modulator.save_to_wav(generated_signal, "hello_world_stream_test_64fsk.wav",
+                      add_gaussian_noise=False)
 
 # For testing
 _, signal = modulator.modulate(TEXT_TO_ENCODE, mode=2, compression_enabled=False)
@@ -229,6 +285,7 @@ _, signal = modulator.modulate(TEXT_TO_ENCODE, mode=2, compression_enabled=False
 modulator.save_to_wav(signal, "hello_world_64fsk.wav", add_gaussian_noise=False)
 modulator.save_to_wav(signal, "hello_world_64fsk_gaussian.wav", add_gaussian_noise=True)
 _, signal_gz = modulator.modulate(TEXT_TO_ENCODE, mode=2, compression_enabled=True)
+modulator.save_to_wav(signal_gz, "hello_world_64fsk_gzip.wav", add_gaussian_noise=False)
 modulator.save_to_wav(signal_gz, "hello_world_64fsk_gaussian_gzip.wav", add_gaussian_noise=True)
 
 
@@ -236,4 +293,5 @@ _, signal_bpsk = modulator.modulate(TEXT_TO_ENCODE, mode=1, compression_enabled=
 modulator.save_to_wav(signal_bpsk, "hello_world_bpsk.wav")
 modulator.save_to_wav(signal_bpsk, "hello_world_bpsk_gaussian.wav", add_gaussian_noise=True)
 _, signal_bpsk_gz = modulator.modulate(TEXT_TO_ENCODE, mode=1, compression_enabled=True)
+modulator.save_to_wav(signal_bpsk_gz, "hello_world_bpsk_gzip.wav", add_gaussian_noise=False)
 modulator.save_to_wav(signal_bpsk_gz, "hello_world_bpsk_gaussian_gzip.wav", add_gaussian_noise=True)

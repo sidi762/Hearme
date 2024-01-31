@@ -5,6 +5,7 @@ Liang Sidi, 2024
 import wave
 import gzip
 import numpy as np
+import scipy.signal
 
 class Demodulator:
     """ Class for demodulating carrier audio signals to text.
@@ -58,6 +59,11 @@ class Demodulator:
         assert m_for_mfsk & (m_for_mfsk - 1) == 0 and m_for_mfsk != 0, "M must be a power of 2"
         self.m_for_mfsk = m_for_mfsk
         self.compression_enabled = compression_enabled
+        self.start_chrip_seq = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25,
+                         587.33, 659.25, 698.46, 783.99, 880.00, 987.77, 1046.50]
+        self.end_chrip_seq = self.start_chrip_seq[::-1]
+        self.preamble_duration = 1
+        self.postamble_duration = 1
 
     def read_from_wav(self, filename):
         """Read a signal from a WAV file.
@@ -81,12 +87,15 @@ class Demodulator:
 
     def get_text(self, signal):
         """Recover text from a signal.
+        Protocol: "HMMSG##<text>##MSGEND"
         Parameters:
             signal (np.array): The signal to recover text from.
         Returns:
             The text.
         """
         binary_data = self.__demodulate(signal)
+        test_data = "0100100001001101010011010101001101000111001000110010001101010100011010000110010100100000011100010111010101101001011000110110101100100000011000100111001001101111011101110110111000100000011001100110111101111000001000000110101001110101011011010111000001110011001000000110111101110110011001010111001000100000011101000110100001100101001000000110110001100001011110100111100100100000011001000110111101100111001011100010000000001010001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000111001011010010010101001111001011001110010110000111001111000111010000100111010011011101110000100111011111011110010001100111001011010111010000111111001011010111010011001111001101011010010101010111010001000110110010010111011111011110010001100111001101001011110100101111001101001110010001000111001111001101110001000111001001011101110000100111011111011110010001100111010001011111010110000111001011010111010111111111001011000100010010111111001011011110010100000111011111011110010001100000010100010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000001110010110101111100100101110011010011101101001011110011010011010100100011110010110111110100000001110111110111100100011001110011110100111100010111110011010010100101101101110010110000110101011001110100010010111100011111110111110111100100011001110100110010111101100001110010010111101100110011110011010001000100100001110010110110010100000011110111110111100100011001110010110111110100010111110010110010000100101011110100010110000100000111110100110011000101100111110001110000000100000100010001100100011010011010101001101000111010001010100111001000100" 
+        print(binary_data)
         return self.__binary_to_string(binary_data, gzip_enabled=self.compression_enabled)
 
     def __mfsk_demodulate(self, signal, M=64):
@@ -208,7 +217,79 @@ class Demodulator:
             return None
         return self.__binary_to_string(binary_data, gzip_enabled=compression_enabled)
 
+    def stft(self, signal, window_size, step_size):
+        """Performs Short-Time Fourier Transform on the signal.
+        Parameters:
+            signal (np.array): The signal to analyze.
+            window_size (int): The size of each time window.
+            step_size (int): The step size between windows.
+        Returns:
+            np.array: STFT matrix (time-frequency representation).
+        """
+        f, t, Zxx = scipy.signal.stft(signal, fs=self.sample_rate, window='hann',
+                                    nperseg=window_size, noverlap=window_size - step_size)
+        return f, t, np.abs(Zxx)
 
+    def detect_stepped_chirp(self, signal, steps, duration):
+        """Detects a stepped chirp in the signal.
+        Parameters:
+            signal (np.array): The signal to analyze.
+            steps (list): The list of frequencies in the chirp.
+            duration (float): The duration of the chirp in seconds.
+        Returns:
+            bool: Whether the chirp is detected.
+        """
+        window_size = int(self.sample_rate * duration / len(steps))
+        step_size = window_size // 2
+        f, t, Zxx = self.stft(signal, window_size, step_size)
+
+        step_duration = duration / len(steps)
+        tolerance = 20  # Frequency tolerance in Hz
+
+        for i, expected_freq in enumerate(steps):
+            # Time interval for this step
+            start_time = i * step_duration
+            end_time = (i + 1) * step_duration
+
+            # Find the time indices corresponding to this interval
+            time_indices = np.where((t >= start_time) & (t < end_time))[0]
+
+            # Check if the expected frequency is present in these time indices
+            freq_present = False
+            for idx in time_indices:
+                # Find peak frequency at this time index
+                peak_freq = f[np.argmax(Zxx[:, idx])]
+                # print(peak_freq)
+                if np.abs(peak_freq - expected_freq) <= tolerance:
+                    freq_present = True
+                    break
+
+            if not freq_present:
+                return False  # Frequency step not detected
+
+        return True  # All frequency steps detected
+
+    def detect_preamble(self, signal):
+        """Detects the preamble in the signal.
+        Parameters:
+            signal (np.array): The signal to analyze.
+        Returns:
+            bool: Whether the preamble is detected.
+        """
+        return self.detect_stepped_chirp(signal,
+                                         self.start_chrip_seq,
+                                         self.preamble_duration)
+  
+    def detect_postamble(self, signal):
+        """Detects the postamble in the signal.
+        Parameters:
+            signal (np.array): The signal to analyze.
+        Returns:
+            bool: Whether the postamble is detected.
+        """
+        return self.detect_stepped_chirp(signal,
+                                         self.end_chrip_seq,
+                                         self.postamble_duration)
 # Example usage
 # demodulator = Demodulator()
 # signal_64fsk = demodulator.read_from_wav("hello_world_64fsk.wav")
