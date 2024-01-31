@@ -21,13 +21,13 @@ class Modulator:
         modulate(self, text, mode=1): Modulates text to carrier audio signal.
         save_to_wav(self, signal, filename="output.wav"): Saves the signal to a WAV file.    
     """
-    def __init__(self, carrier_freq=2200, sample_rate=44100, bit_duration=0.1, bandwidth=2200):
+    def __init__(self, carrier_freq=8800, sample_rate=44100, bit_duration=0.01, bandwidth=4400):
         """Initializes the modulator.
         Parameters:
-            carrier_freq(int, default=2000): The frequency of the carrier signal in Hz.
+            carrier_freq(int, default=8800): The frequency of the carrier signal in Hz.
             sample_rate(int, default=44100): The sampling rate in Hz.
-            bit_duration(float, default=0.1): The duration of each bit in seconds.
-            bandwidth(int, default=2200): The bandwidth of the signal in Hz.
+            bit_duration(float, default=0.01): The duration of each bit in seconds.
+            bandwidth(int, default=4400): The bandwidth of the signal in Hz.
         """
         self.carrier_freq = carrier_freq
         self.sample_rate = sample_rate
@@ -171,7 +171,11 @@ text_to_encode = "The quick brown fox jumps over the lazy dog. \n\
                   天地玄黄，宇宙洪荒，日月盈仄，辰宿列张，\n\
                   寒来暑往，秋收冬藏，闰余成岁，律吕调阳。"
 _, signal = modulator.modulate(text_to_encode, mode=2, compression_enabled=False)
-modulator.save_to_wav(signal, "hello_world_64fsk.wav", add_gaussian_noise=True)
+# play the signal
+# import sounddevice as sd
+# sd.play(signal, modulator.sample_rate, blocking=True)
+
+modulator.save_to_wav(signal, "hello_world_64fsk.wav", add_gaussian_noise=False)
 modulator.save_to_wav(signal, "hello_world_64fsk_gaussian.wav", add_gaussian_noise=True)
 _, signal_gz = modulator.modulate(text_to_encode, mode=2, compression_enabled=True)
 modulator.save_to_wav(signal_gz, "hello_world_64fsk_gaussian_gzip.wav", add_gaussian_noise=True)
@@ -182,4 +186,3 @@ modulator.save_to_wav(signal_bpsk, "hello_world_bpsk.wav")
 modulator.save_to_wav(signal_bpsk, "hello_world_bpsk_gaussian.wav", add_gaussian_noise=True)
 _, signal_bpsk_gz = modulator.modulate(text_to_encode, mode=1, compression_enabled=True)
 modulator.save_to_wav(signal_bpsk_gz, "hello_world_bpsk_gaussian_gzip.wav", add_gaussian_noise=True)
-

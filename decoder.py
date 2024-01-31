@@ -23,13 +23,13 @@ class Demodulator:
         binary_to_string(self, binary_data): Converts binary data to text.
         demodulate(self, signal, mode=1): Demodulates the signal to text.
     """
-    def __init__(self, carrier_freq=2200, sample_rate=44100, bit_duration=0.1, bandwidth=2200):
+    def __init__(self, carrier_freq=8800, sample_rate=44100, bit_duration=0.01, bandwidth=4400):
         """Initialize the demodulator with specified parameters.
         Parameters:
-            carrier_freq (int, default=2000): The frequency of the carrier signal in Hz.
+            carrier_freq (int, default=8800): The frequency of the carrier signal in Hz.
             sample_rate (int, default=44100): The sampling rate in Hz.
-            bit_duration (float, default=0.1): The duration of each bit in seconds.
-            bandwidth (int, default=2200): The bandwidth of the signal in Hz.
+            bit_duration (float, default=0.01): The duration of each bit in seconds.
+            bandwidth (int, default=4400): The bandwidth of the signal in Hz.
         """
         self.carrier_freq = carrier_freq
         self.sample_rate = sample_rate
@@ -100,7 +100,7 @@ class Demodulator:
             binary_data += format(symbol, f'0{int(np.log2(M))}b')
 
         return binary_data
-    
+
     def bpsk_demodulate(self, signal):
         """Demodulate the BPSK signal to binary data.
         Parameters: 
@@ -139,12 +139,13 @@ class Demodulator:
             byte_array = gzip.decompress(byte_array)
         return byte_array.decode('utf-8', errors='ignore')
 
-    def demodulate(self, signal, mode=2):
+    def demodulate(self, signal, mode=2, compression_enabled=True):
         """Demodulate the signal to text.
         Parameters:
             signal(np.array): The signal to demodulate.
             mode(int, default=2): The demodulation mode. 
                                   Currently only supports BPSK (1), 64-FSK (2).
+            compression_enabled(bool, default=True): Whether to decompress the binary data using GZIP.
         Returns:
             The text.
         """
@@ -155,24 +156,35 @@ class Demodulator:
         else:
             # Not Implemented
             return None
-        return self.binary_to_string(binary_data)
+        return self.binary_to_string(binary_data, gzip_enabled=compression_enabled)
 
 
 # Example usage
 demodulator = Demodulator()
 signal_64fsk = demodulator.read_from_wav("hello_world_64fsk.wav")
-decoded_text_64fsk = demodulator.demodulate(signal_64fsk)
+decoded_text_64fsk = demodulator.demodulate(signal_64fsk, compression_enabled=False)
 print("64-FSK: \n", decoded_text_64fsk)
 
 signal_64fsk_gaussian = demodulator.read_from_wav("hello_world_64fsk_gaussian.wav")
-decoded_text_64fsk_gaussian = demodulator.demodulate(signal_64fsk_gaussian)
+decoded_text_64fsk_gaussian = demodulator.demodulate(signal_64fsk_gaussian, 
+                                                     compression_enabled=False)
 print("64-FSK with Gaussian Noise: \n", decoded_text_64fsk_gaussian)
 
+signal_64fsk_gaussian_gzip = demodulator.read_from_wav("hello_world_64fsk_gaussian_gzip.wav")
+decoded_text_64fsk_gaussian_gzip = demodulator.demodulate(signal_64fsk_gaussian_gzip)
+print("64-FSK with Gaussian Noise and GZIP: \n", decoded_text_64fsk_gaussian_gzip)
+
+
 signal_bpsk = demodulator.read_from_wav("hello_world_bpsk.wav")
-decoded_text_bpsk = demodulator.demodulate(signal_bpsk, mode=1)
+decoded_text_bpsk = demodulator.demodulate(signal_bpsk, mode=1, compression_enabled=False)
 print("BPSK: \n", decoded_text_bpsk)
 
 signal_bpsk_gaussian = demodulator.read_from_wav("hello_world_bpsk_gaussian.wav")
-decoded_text_bpsk_gaussian = demodulator.demodulate(signal_bpsk_gaussian, mode=1)
+decoded_text_bpsk_gaussian = demodulator.demodulate(signal_bpsk_gaussian,
+                                                    mode=1,
+                                                    compression_enabled=False)
 print("BPSK with Gaussian Noise: \n", decoded_text_bpsk_gaussian)
 
+signal_bpsk_gaussian_gzip = demodulator.read_from_wav("hello_world_bpsk_gaussian_gzip.wav")
+decoded_text_bpsk_gaussian_gzip = demodulator.demodulate(signal_bpsk_gaussian_gzip, mode=1)
+print("BPSK with Gaussian Noise and GZIP: \n", decoded_text_bpsk_gaussian_gzip)
