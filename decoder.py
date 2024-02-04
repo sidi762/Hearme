@@ -214,7 +214,7 @@ class Demodulator:
         y = scipy.signal.lfilter(b, a, data)
         return y
 
-    def __mfsk_demodulate(self, signal, M=64):
+    def __mfsk_demodulate_old(self, signal, M=64):
         """Demodulate the MFSK signal to binary data.
         Parameters: 
             signal (np.array): The signal to demodulate.
@@ -269,7 +269,7 @@ class Demodulator:
 
         return binary_data
    
-    def __mfsk_demodulate_new(self, signal, M=64):
+    def __mfsk_demodulate(self, signal, M=64):
         """Demodulate the MFSK signal to binary data using STFT.
         Parameters:
             signal (np.array): The signal to demodulate.
@@ -288,17 +288,15 @@ class Demodulator:
             start = i * int(self.sample_rate * self.bit_duration)
             end = start + int(self.sample_rate * self.bit_duration)
             symbol_slice = signal[start:end]
-            
             # Perform STFT
-            f, t, Zxx = scipy.signal.stft(symbol_slice, fs=self.sample_rate, nperseg=symbol_duration)
-            
+            f, _, Zxx = scipy.signal.stft(symbol_slice,
+                                          fs=self.sample_rate,
+                                          nperseg=symbol_duration)
             # Find the peak frequency for each time bin in the STFT result
             peak_freqs = f[np.argmax(np.abs(Zxx), axis=0)]
-            
             # Average the peak frequencies over the symbol duration to get the dominant frequency
             dominant_freq = np.mean(peak_freqs)
             # print(dominant_freq)
-            
             # Find the nearest carrier frequency
             symbol_index = np.argmin(np.abs(symbol_freqs - dominant_freq))
             binary_data += format(symbol_index, f'0{bits_per_symbol}b')
