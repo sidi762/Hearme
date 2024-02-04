@@ -222,9 +222,10 @@ class Modulator:
         # Number of bits per symbol (e.g., M=4 means 2 bits per symbol for 4-FSK)
         bits_per_symbol = int(np.log2(M))
 
-        # Calculate the number of symbols
-        num_symbols = int(len(binary_data) / bits_per_symbol)
-
+        # Calculate the number of symbols (pad the trailing bits with zeros if necessary)
+        binary_data += '0' * (bits_per_symbol - len(binary_data) % bits_per_symbol)
+        num_symbols = len(binary_data) // bits_per_symbol
+        print(f"Num symbols: {num_symbols}")
         # Frequencies for each symbol
         # symbol_freqs = np.linspace(self.carrier_freq - M*440/2, self.carrier_freq + M*440/2, M)
         symbol_freqs = np.linspace(self.carrier_freq - self.bandwidth/2,
