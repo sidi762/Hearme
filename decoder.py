@@ -6,6 +6,83 @@ import wave
 import gzip
 import numpy as np
 import scipy.signal
+from reedsolo import RSCodec, ReedSolomonError
+
+class Decoder:
+    """Class for decoding Hearme binary data to text.
+    """
+    def __init__(self, fec_enabled=True, fec_nsym=50,
+                 compression_enabled=True):
+        self.compression_enabled = compression_enabled
+        self.fec_enabled = fec_enabled
+        self.fec_nsym = fec_nsym
+        if self.fec_enabled:
+            self.rscodec = RSCodec(self.fec_nsym)
+
+    def print_config(self):
+        """Print the configuration of the decoder.
+        """
+        print("Hearme Decoder Module. Liang Sidi, 2024.")
+        print(f"Compression Enabled: {self.compression_enabled}")
+        print(f"FEC Enabled: {self.fec_enabled}")
+        print(f"FEC Nsym: {self.fec_nsym}")
+
+    def decode(self, binary_data, fec_enabled=True, compression_enabled=True):
+        """Convert binary data to text.
+        Parameters:
+            binary_data(str): The binary data to be converted.
+            fec_enabled(bool, default=True): Whether Forward Error Correction is used.
+            compression_enabled(bool, default=True): Whether data is GZIP compressed.
+        Returns:
+            The text.
+        """
+        self.print_config()
+        # print(binary_data)
+        print("Msg Len: " + str(len(binary_data)))
+        print(binary_data)
+        byte_array = bytearray(int(binary_data[i:i+8], 2) for i in range(0, len(binary_data), 8))
+        if fec_enabled:
+            # Apply Reed-Solomon decoding
+            try:
+                byte_array, _, ecc = self.rscodec.decode(byte_array)
+                print("ECC: " + str(ecc))
+            except ReedSolomonError:
+                return "Decoding failed: Too many errors to correct."
+        if compression_enabled:
+            # Decompress the data
+            try:
+                byte_array = gzip.decompress(byte_array)
+            except gzip.BadGzipFile:
+                return "Decompression failed. Data could be corrupted."
+        return byte_array.decode('utf-8', errors='ignore')
+
+    def get_message(self, binary_data):
+        """Recover text from a signal.
+        Protocol: "H#<text>##"
+        Parameters:
+            signal (np.array): The signal to recover text from.
+        Returns:
+            The text.
+        """
+        print(f"Length of binary data: {len(binary_data)}")
+        print(binary_data)
+        msg_header = "H#"
+        msg_end = "##"
+        msg_header_binary = ''.join(format(ord(char), '08b') for char in msg_header)
+        msg_end_binary = ''.join(format(ord(char), '08b') for char in msg_end)
+        sync_start_index = binary_data.find(msg_header_binary)
+        sync_end_index = binary_data.find(msg_end_binary)
+        if sync_start_index != -1:
+            if sync_end_index == -1:
+                return "Message incomplete."
+            # Extract actual message starting from the end of sync symbol, 
+            # until the end of the message
+            message_binary = binary_data[sync_start_index + len(msg_header_binary):sync_end_index]
+            print(message_binary)
+            return self.decode(message_binary,
+                               fec_enabled=self.fec_enabled,
+                               compression_enabled=self.compression_enabled)
+        return "No message detected."
 
 class Demodulator:
     """ Class for demodulating carrier audio signals to text.
@@ -17,7 +94,6 @@ class Demodulator:
         modulation_mode (int): The modulation mode. 1 for BPSK, 2
                                for MFSK.
         m_for_mfsk (int): The M in MFSK, default to 64-FSK. Must be a power of 2.
-        compression_enabled (bool): Whether to use gzip compression.
         
     Methods:
         __init__(self, 
@@ -27,6 +103,8 @@ class Demodulator:
                 bandwidth=2000,
                 modulation_mode=2,
                 m_for_mfsk=64,
+                fec_enabled=True,
+                fec_nsym=10,
                 compression_enabled=True): Initializes the demodulator.
         read_from_wav(self, filename): Reads a signal from a WAV file.
         get_text(self, signal): Recovers text from a signal.
@@ -37,7 +115,7 @@ class Demodulator:
     """
     def __init__(self, carrier_freq=8800, sample_rate=44100,
                  bit_duration=0.01, bandwidth=4400, modulation_mode=2,
-                 m_for_mfsk=64, compression_enabled=True):
+                 m_for_mfsk=64):
         """Initialize the demodulator with specified parameters.
         Parameters:
             carrier_freq (int, default=8800): The frequency of the carrier signal in Hz.
@@ -48,7 +126,6 @@ class Demodulator:
                                               1 for BPSK, 2 for MFSK.
             m_for_mfsk (int, default=64): The M in MFSK, default to 64-FSK. 
                                           Must be a power of 2.
-            compression_enabled (bool, default=True): Whether to use gzip compression.
         """
         self.carrier_freq = carrier_freq
         self.sample_rate = sample_rate
@@ -58,7 +135,6 @@ class Demodulator:
         # Check is M is a power of 2
         assert m_for_mfsk & (m_for_mfsk - 1) == 0 and m_for_mfsk != 0, "M must be a power of 2"
         self.m_for_mfsk = m_for_mfsk
-        self.compression_enabled = compression_enabled
         self.start_chrip_seq = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25,
                          587.33, 659.25, 698.46, 783.99, 880.00, 987.77, 1046.50]
         self.end_chrip_seq = self.start_chrip_seq[::-1]
@@ -84,19 +160,59 @@ class Demodulator:
 
         # Normalize the signal
         return signal / max(abs(signal))
-
-    def get_text(self, signal):
-        """Recover text from a signal.
-        Protocol: "HMMSG##<text>##MSGEND"
-        Parameters:
-            signal (np.array): The signal to recover text from.
-        Returns:
-            The text.
+ 
+    def print_config(self):
+        """Print the configuration of the demodulator.
         """
-        binary_data = self.__demodulate(signal)
-        test_data = "0100100001001101010011010101001101000111001000110010001101010100011010000110010100100000011100010111010101101001011000110110101100100000011000100111001001101111011101110110111000100000011001100110111101111000001000000110101001110101011011010111000001110011001000000110111101110110011001010111001000100000011101000110100001100101001000000110110001100001011110100111100100100000011001000110111101100111001011100010000000001010001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000111001011010010010101001111001011001110010110000111001111000111010000100111010011011101110000100111011111011110010001100111001011010111010000111111001011010111010011001111001101011010010101010111010001000110110010010111011111011110010001100111001101001011110100101111001101001110010001000111001111001101110001000111001001011101110000100111011111011110010001100111010001011111010110000111001011010111010111111111001011000100010010111111001011011110010100000111011111011110010001100000010100010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000001110010110101111100100101110011010011101101001011110011010011010100100011110010110111110100000001110111110111100100011001110011110100111100010111110011010010100101101101110010110000110101011001110100010010111100011111110111110111100100011001110100110010111101100001110010010111101100110011110011010001000100100001110010110110010100000011110111110111100100011001110010110111110100010111110010110010000100101011110100010110000100000111110100110011000101100111110001110000000100000100010001100100011010011010101001101000111010001010100111001000100" 
-        print(binary_data)
-        return self.__binary_to_string(binary_data, gzip_enabled=self.compression_enabled)
+        print("Hearme Demodulator Module. Liang Sidi, 2024.")
+        # Print Parameters
+        print(f"Carrier Frequency: {self.carrier_freq}")
+        print(f"Sample Rate: {self.sample_rate}")
+        print(f"Bit Duration: {self.bit_duration}")
+        print(f"Bandwidth: {self.bandwidth}")
+        print(f"Modulation Mode: {self.modulation_mode}")
+        print(f"M for MFSK: {self.m_for_mfsk}")
+
+    
+    def get_binary(self, signal):
+        """Demodulate the signal to binary data.
+        Parameters:
+            signal(np.array): The signal to demodulate.
+        Returns:
+            The binary data.
+        """
+        return self.__demodulate(signal)
+
+    def butter_bandpass(self, lowcut, highcut, fs, order=5):
+        """ A Butterworth bandpass filter.
+        Parameters:
+            lowcut (int): The lower cutoff frequency.
+            highcut (int): The higher cutoff frequency.
+            fs (int): The sampling rate.
+            order (int): The order of the filter.
+        Returns:
+            The filter coefficients.
+        """
+        nyq = 0.5 * fs
+        low = lowcut / nyq
+        high = highcut / nyq
+        b, a = scipy.signal.butter(order, [low, high], btype='band')
+        return b, a
+
+    def bandpass_filter(self, data, lowcut, highcut, fs, order=5):
+        """Apply a bandpass filter to the data.
+        Parameters:
+            data (np.array): The data to filter.
+            lowcut (int): The lower cutoff frequency.
+            highcut (int): The higher cutoff frequency.
+            fs (int): The sampling rate.
+            order (int): The order of the filter.
+        Returns:
+            The filtered data.
+        """
+        b, a = self.butter_bandpass(lowcut, highcut, fs, order=order)
+        y = scipy.signal.lfilter(b, a, data)
+        return y
 
     def __mfsk_demodulate(self, signal, M=64):
         """Demodulate the MFSK signal to binary data.
@@ -107,8 +223,12 @@ class Demodulator:
         Returns:
             The binary data.
         """
+        # Filter the signal to the bandwidth
+        # signal = self.bandpass_filter(signal, self.carrier_freq - self.bandwidth/2,
+        #                               self.carrier_freq + self.bandwidth/2,
+        #                               self.sample_rate)
         bits_per_symbol = int(np.log2(M))
-        num_symbols = len(signal) // int(self.sample_rate * self.bit_duration)
+        num_symbols = int(len(signal) / int(self.sample_rate * self.bit_duration))
 
         # Frequencies for each symbol
         # symbol_freqs = np.linspace(self.carrier_freq - M*440/2, self.carrier_freq + M*440/2, M)
@@ -124,22 +244,64 @@ class Demodulator:
             symbol_slice = signal[start:end]
 
             # Zero padding for increased FFT resolution
-            zero_padded_slice = np.pad(symbol_slice, (0, len(symbol_slice)), 'constant')
+            zero_padded_slice = np.pad(symbol_slice, (0, len(symbol_slice) * 3), 'constant')
 
             # Perform FFT
             fft_result = np.fft.fft(zero_padded_slice)
             freqs = np.fft.fftfreq(len(zero_padded_slice), 1 / self.sample_rate)
-            
+
             # Focus on the positive frequencies only
             half_n = len(fft_result) // 2
             fft_result_positive = fft_result[:half_n]
             freqs_positive = freqs[:half_n]
+
+            cut_high = self.carrier_freq + self.bandwidth/2 + 100 # Hz
+            cut_low = self.carrier_freq - self.bandwidth/2 - 100 # Hz
+            # Filter the FFT result to the bandwidth
+            # fft_result_positive = fft_result_positive[(freqs_positive > cut_low)
+            #                                           & (freqs_positive < cut_high)]
 
             # Find the frequency in symbol_freqs closest to the peak frequency in the FFT
             peak_freq = freqs_positive[np.argmax(np.abs(fft_result_positive))]
             # print(peak_freq)
             symbol = np.argmin(np.abs(symbol_freqs - peak_freq))
             binary_data += format(symbol, f'0{int(np.log2(M))}b')
+
+        return binary_data
+   
+    def __mfsk_demodulate_new(self, signal, M=64):
+        """Demodulate the MFSK signal to binary data using STFT.
+        Parameters:
+            signal (np.array): The signal to demodulate.
+            M (int): The M in MFSK, representing the number of different frequencies.
+        Returns:
+            The binary data.
+        """
+        bits_per_symbol = int(np.log2(M))
+        symbol_duration = int(self.sample_rate * self.bit_duration)
+        symbol_freqs = np.linspace(self.carrier_freq - self.bandwidth/2,
+                                   self.carrier_freq + self.bandwidth/2, M)
+        num_symbols = len(signal) // int(self.sample_rate * self.bit_duration)
+
+        binary_data = ""
+        for i in range(num_symbols):
+            start = i * int(self.sample_rate * self.bit_duration)
+            end = start + int(self.sample_rate * self.bit_duration)
+            symbol_slice = signal[start:end]
+            
+            # Perform STFT
+            f, t, Zxx = scipy.signal.stft(symbol_slice, fs=self.sample_rate, nperseg=symbol_duration)
+            
+            # Find the peak frequency for each time bin in the STFT result
+            peak_freqs = f[np.argmax(np.abs(Zxx), axis=0)]
+            
+            # Average the peak frequencies over the symbol duration to get the dominant frequency
+            dominant_freq = np.mean(peak_freqs)
+            # print(dominant_freq)
+            
+            # Find the nearest carrier frequency
+            symbol_index = np.argmin(np.abs(symbol_freqs - dominant_freq))
+            binary_data += format(symbol_index, f'0{bits_per_symbol}b')
 
         return binary_data
 
@@ -168,46 +330,30 @@ class Demodulator:
 
         return binary_data
 
-    def __binary_to_string(self, binary_data, gzip_enabled=True):
-        """Convert binary data to text.
-        Parameters:
-            binary_data(str): The binary data to be converted.
-            gzip_enabled(bool, default=True): Whether to use gzip compression.
-        Returns:
-            The text.
-        """
-        byte_array = bytearray(int(binary_data[i:i+8], 2) for i in range(0, len(binary_data), 8))
-        if gzip_enabled:
-            try:
-                byte_array = gzip.decompress(byte_array)
-            except gzip.BadGzipFile:
-                return "Decompression failed. Data could be corrupted."
-        return byte_array.decode('utf-8', errors='ignore')
-
     def __demodulate(self, signal):
         """Demodulate the signal to binary data.
         Parameters:
             signal(np.array): The signal to demodulate.
         Returns:
-            The binary data.
+            The demodulated binary data.
         """
+        self.print_config()
         if self.modulation_mode == 1:
             return self.__bpsk_demodulate(signal)
         if self.modulation_mode == 2:
             return self.__mfsk_demodulate(signal, M=self.m_for_mfsk)
         return None
 
-    def demodulate(self, signal, mode=2, compression_enabled=True):
+    def demodulate(self, signal, mode=2):
         """Demodulate the signal to text.
         Parameters:
             signal(np.array): The signal to demodulate.
             mode(int, default=2): The demodulation mode. 
                                   Currently only supports BPSK (1), 64-FSK (2).
-            compression_enabled(bool, default=True): Whether to decompress the 
-                                                     binary data using GZIP.
         Returns:
-            The text.
+            The demodulated binary data.
         """
+        self.print_config()
         if mode == 1:
             binary_data = self.__bpsk_demodulate(signal)
         elif mode == 2:
@@ -215,7 +361,7 @@ class Demodulator:
         else:
             # Not Implemented
             return None
-        return self.__binary_to_string(binary_data, gzip_enabled=compression_enabled)
+        return binary_data
 
     def stft(self, signal, window_size, step_size):
         """Performs Short-Time Fourier Transform on the signal.
@@ -279,7 +425,7 @@ class Demodulator:
         return self.detect_stepped_chirp(signal,
                                          self.start_chrip_seq,
                                          self.preamble_duration)
-  
+
     def detect_postamble(self, signal):
         """Detects the postamble in the signal.
         Parameters:
@@ -291,10 +437,16 @@ class Demodulator:
                                          self.end_chrip_seq,
                                          self.postamble_duration)
 # Example usage
-# demodulator = Demodulator()
-# signal_64fsk = demodulator.read_from_wav("hello_world_64fsk.wav")
-# decoded_text_64fsk = demodulator.demodulate(signal_64fsk, compression_enabled=False)
-# print("64-FSK: \n", decoded_text_64fsk)
+demodulator = Demodulator()
+decoder = Decoder()
+demodulator.bit_duration = 0.05  # 100 ms bit duration
+demodulator.carrier_freq = 16000  # 16 kHz carrier frequency
+signal_64fsk = demodulator.read_from_wav("hello_world_64fsk.wav")
+demodulated_binary_64fsk = demodulator.demodulate(signal_64fsk)
+decoded_text_64fsk = decoder.decode(demodulated_binary_64fsk, 
+                                    compression_enabled=False, 
+                                    fec_enabled=False)
+print("64-FSK: \n", decoded_text_64fsk)
 
 # signal_64fsk_gaussian = demodulator.read_from_wav("hello_world_64fsk_gaussian.wav")
 # decoded_text_64fsk_gaussian = demodulator.demodulate(signal_64fsk_gaussian, 
