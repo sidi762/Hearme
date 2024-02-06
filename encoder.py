@@ -38,10 +38,10 @@ class Encoder:
             The encoded text.
         """
         binary_data = self.generate_binary(text,
-                                              gzip_enabled=self.compression_enabled,
-                                              fec_enabled=self.fec_enabled)
+                                           gzip_enabled=self.compression_enabled,
+                                           fec_enabled=self.fec_enabled)
         return binary_data
-    
+
     def generate_binary(self, text, gzip_enabled=True, fec_enabled=True):
         """Converts text to binary data.
         Parameters:
@@ -343,12 +343,12 @@ encoder = Encoder()
 encoder.compression_enabled = False
 modulator.carrier_freq = 16000
 modulator.sample_rate = 44100
-modulator.bit_duration = 0.05
+modulator.bit_duration = 0.01
 # text_to_encode = "The quick brown fox jumps over the lazy dog."
-# TEXT_TO_ENCODE = "The quick brown fox jumps over the lazy dog. \n\
-#                   天地玄黄，宇宙洪荒，日月盈仄，辰宿列张，\n\
-#                   寒来暑往，秋收冬藏，闰余成岁，律吕调阳。"
-TEXT_TO_ENCODE = "Hello, World!"
+TEXT_TO_ENCODE = "The quick brown fox jumps over the lazy dog. \n\
+                  天地玄黄，宇宙洪荒，日月盈仄，辰宿列张，\n\
+                  寒来暑往，秋收冬藏，闰馀成岁，律吕调阳。"
+# TEXT_TO_ENCODE = "Hello, World!"
 # ENCODED_DATA = encoder.encode(TEXT_TO_ENCODE)
 # generated_signal = modulator.generate_signal(ENCODED_DATA)
 # modulator.save_to_wav(generated_signal, "hello_world_stream_test_64fsk.wav",
