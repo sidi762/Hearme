@@ -278,19 +278,23 @@ class Demodulator:
             The binary data.
         """
         bits_per_symbol = int(np.log2(M))
+        num_samples = len(signal)
+        print(f"Num Samples: {num_samples}")
         symbol_duration = int(self.sample_rate * self.bit_duration)
+        num_symbols = num_samples // symbol_duration
+        print(f"Num Symbols: {num_symbols}")
+        # The duration of each symbol in samples
         symbol_freqs = np.linspace(self.carrier_freq - self.bandwidth/2,
                                    self.carrier_freq + self.bandwidth/2, M)
-        num_symbols = len(signal) // int(self.sample_rate * self.bit_duration)
 
         binary_data = ""
-        for i in range(num_symbols):
-            start = i * int(self.sample_rate * self.bit_duration)
-            end = start + int(self.sample_rate * self.bit_duration)
-            symbol_slice = signal[start:end]
+        for i in range(0, num_samples, symbol_duration):
+            symbol_slice = signal[i:i + symbol_duration]
             # Perform STFT
             f, _, Zxx = scipy.signal.stft(symbol_slice,
                                           fs=self.sample_rate,
+                                          window='hann',
+                                          nfft=symbol_duration*3,
                                           nperseg=symbol_duration)
             # Find the peak frequency for each time bin in the STFT result
             peak_freqs = f[np.argmax(np.abs(Zxx), axis=0)]
@@ -437,12 +441,12 @@ class Demodulator:
 # Example usage
 demodulator = Demodulator()
 decoder = Decoder()
-demodulator.bit_duration = 0.05  # 100 ms bit duration
+demodulator.bit_duration = 0.01  # 100 ms bit duration
 demodulator.carrier_freq = 16000  # 16 kHz carrier frequency
 signal_64fsk = demodulator.read_from_wav("hello_world_64fsk.wav")
 demodulated_binary_64fsk = demodulator.demodulate(signal_64fsk)
-decoded_text_64fsk = decoder.decode(demodulated_binary_64fsk, 
-                                    compression_enabled=False, 
+decoded_text_64fsk = decoder.decode(demodulated_binary_64fsk,
+                                    compression_enabled=False,
                                     fec_enabled=False)
 print("64-FSK: \n", decoded_text_64fsk)
 
