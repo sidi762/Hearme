@@ -1,8 +1,7 @@
 """
-This module initializes the digital signal processing package, 
-providing tools for encoding, decoding, and signal detection. 
-It facilitates the conversion of textual information into modulated signals 
-and vice versa, supporting various encoding schemes and modulation techniques.
+This module initializes the acoustic signal processing package, 
+providing tools  for encoding and decoding text into audio signals 
+for acoustic data transmission.
 Liang Sidi, 2024
 """
 from . import decoder, detector, encoder

@@ -1,6 +1,6 @@
 """
 Implements signal detection logic to identify the presence 
-of digital signals using the microphone (with pyaudio). 
+of sound signals using the microphone (with pyaudio). 
 This module includes methods for preamble detection, 
 signal strength analysis, and synchronization to facilitate 
 accurate decoding.
