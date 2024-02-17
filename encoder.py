@@ -172,7 +172,8 @@ class Modulator:
         print(f"Sent data: {binary_data}")
         _, modulated_signal = self.__modulate(binary_data)
         signal = np.concatenate((stepped_chirp_start, np.zeros(int(self.sample_rate * 0.5)),
-                                 modulated_signal, np.zeros(int(self.sample_rate * self.bit_duration)),
+                                 modulated_signal,
+                                 np.zeros(int(self.sample_rate * self.bit_duration)),
                                  stepped_chirp_end, np.zeros(self.sample_rate)))
         return signal
 
@@ -342,25 +343,27 @@ modulator = Modulator()
 encoder = Encoder()
 encoder.compression_enabled = False
 modulator.carrier_freq = 16000
+modulator.bandwidth = 4400
+modulator.m_for_mfsk = 64
 modulator.sample_rate = 44100
-modulator.bit_duration = 0.01
+modulator.bit_duration = 0.05
 # text_to_encode = "The quick brown fox jumps over the lazy dog."
-TEXT_TO_ENCODE = "The quick brown fox jumps over the lazy dog. \n\
-                  天地玄黄，宇宙洪荒，日月盈仄，辰宿列张，\n\
-                  寒来暑往，秋收冬藏，闰馀成岁，律吕调阳。"
-# TEXT_TO_ENCODE = "Hello, World!"
-# ENCODED_DATA = encoder.encode(TEXT_TO_ENCODE)
-# generated_signal = modulator.generate_signal(ENCODED_DATA)
-# modulator.save_to_wav(generated_signal, "hello_world_stream_test_64fsk.wav",
-#                       add_gaussian_noise=False)
+# TEXT_TO_ENCODE = "The quick brown fox jumps over the lazy dog. \n\
+#                   天地玄黄，宇宙洪荒，日月盈仄，辰宿列张，\n\
+#                   寒来暑往，秋收冬藏，闰馀成岁，律吕调阳。"
+TEXT_TO_ENCODE = "Hello, World!"
+ENCODED_DATA = encoder.encode(TEXT_TO_ENCODE)
+generated_signal = modulator.generate_signal(ENCODED_DATA)
+modulator.save_to_wav(generated_signal, "hello_world_stream_test_64fsk.wav",
+                      add_gaussian_noise=False)
 
-# For testing
-ENCODED_DATA = encoder.generate_binary(TEXT_TO_ENCODE, gzip_enabled=False, fec_enabled=False)
-_, signal = modulator.modulate(ENCODED_DATA, mode=2)
+# # For testing
+# ENCODED_DATA = encoder.generate_binary(TEXT_TO_ENCODE, gzip_enabled=False, fec_enabled=False)
+# _, signal = modulator.modulate(ENCODED_DATA, mode=2)
 # play the signal
 # # import sounddevice as sd
 # # sd.play(signal, modulator.sample_rate, blocking=True)
-modulator.save_to_wav(signal, "hello_world_64fsk.wav", add_gaussian_noise=False)
+# modulator.save_to_wav(signal, "hello_world_64fsk.wav", add_gaussian_noise=False)
 
 # _, signal_bpsk = modulator.modulate(ENCODED_DATA, mode=1)
 # modulator.save_to_wav(signal_bpsk, "hello_world_bpsk.wav")

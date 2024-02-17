@@ -57,7 +57,7 @@ class Decoder:
         return byte_array.decode('utf-8', errors='ignore')
 
     def get_message(self, binary_data):
-        """Recover text from a signal.
+        """Recover text from a demodulated binary signal.
         Protocol: "H#<text>##"
         Parameters:
             signal (np.array): The signal to recover text from.
@@ -107,7 +107,8 @@ class Demodulator:
                 fec_nsym=10,
                 compression_enabled=True): Initializes the demodulator.
         read_from_wav(self, filename): Reads a signal from a WAV file.
-        get_text(self, signal): Recovers text from a signal.
+        print_config(self): Prints the configuration of the demodulator.
+        get_binary(self, signal): Demodulates the signal to binary data.
         __bpsk_demodulate(self, signal): Demodulates the BPSK signal to binary data.
         __mfsk_demodulate(self, signal, M=64): Demodulates the MFSK signal to binary data.
         __binary_to_string(self, binary_data): Converts binary data to text.
@@ -160,7 +161,7 @@ class Demodulator:
 
         # Normalize the signal
         return signal / max(abs(signal))
- 
+
     def print_config(self):
         """Print the configuration of the demodulator.
         """
@@ -173,7 +174,6 @@ class Demodulator:
         print(f"Modulation Mode: {self.modulation_mode}")
         print(f"M for MFSK: {self.m_for_mfsk}")
 
-    
     def get_binary(self, signal):
         """Demodulate the signal to binary data.
         Parameters:
@@ -438,17 +438,18 @@ class Demodulator:
         return self.detect_stepped_chirp(signal,
                                          self.end_chrip_seq,
                                          self.postamble_duration)
+
 # Example usage
-demodulator = Demodulator()
-decoder = Decoder()
-demodulator.bit_duration = 0.01  # 100 ms bit duration
-demodulator.carrier_freq = 16000  # 16 kHz carrier frequency
-signal_64fsk = demodulator.read_from_wav("hello_world_64fsk.wav")
-demodulated_binary_64fsk = demodulator.demodulate(signal_64fsk)
-decoded_text_64fsk = decoder.decode(demodulated_binary_64fsk,
-                                    compression_enabled=False,
-                                    fec_enabled=False)
-print("64-FSK: \n", decoded_text_64fsk)
+# demodulator = Demodulator()
+# decoder = Decoder()
+# demodulator.bit_duration = 0.01  # 100 ms bit duration
+# demodulator.carrier_freq = 16000  # 16 kHz carrier frequency
+# signal_64fsk = demodulator.read_from_wav("hello_world_64fsk.wav")
+# demodulated_binary_64fsk = demodulator.demodulate(signal_64fsk)
+# decoded_text_64fsk = decoder.decode(demodulated_binary_64fsk,
+#                                     compression_enabled=False,
+#                                     fec_enabled=False)
+# print("64-FSK: \n", decoded_text_64fsk)
 
 # signal_64fsk_gaussian = demodulator.read_from_wav("hello_world_64fsk_gaussian.wav")
 # decoded_text_64fsk_gaussian = demodulator.demodulate(signal_64fsk_gaussian, 
