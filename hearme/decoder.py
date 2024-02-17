@@ -1,7 +1,7 @@
-'''
+"""
 The decoder module, responsible for decoding the carrier audio signal to text.
 Liang Sidi, 2024
-'''
+"""
 import wave
 import gzip
 import numpy as np

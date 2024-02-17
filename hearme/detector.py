@@ -1,19 +1,51 @@
+"""
+Implements signal detection logic to identify the presence 
+of digital signals using the microphone (with pyaudio). 
+This module includes methods for preamble detection, 
+signal strength analysis, and synchronization to facilitate 
+accurate decoding.
+Liang Sidi, 2024
+"""
+
 import pyaudio
 import numpy as np
 import scipy
-from decoder import Demodulator, Decoder
 
 class HearmeDetector:
+    """
+    A class that represents a Hearme detector.
+
+    Attributes:
+        demodulator (Demodulator): The demodulator object used for demodulation.
+        decoder (Decoder): The decoder object used for decoding.
+        chunk_size (int): Number of audio samples per read.
+        format (int): Audio format (16-bit).
+        channels (int): Number of audio channels (mono).
+        rate (int): Sampling rate.
+        window_size (int): Size of the sliding window in samples.
+        sliding_window (numpy.ndarray): Sliding window buffer.
+        state (str): Current state of the detector.
+        message_data (numpy.ndarray): Buffer for storing message data.
+
+    Methods:
+        __init__(self, demodulator, decoder): Initializes the HearmeDetector object.
+        apply_filter(self, data): Applies the bandpass filter to the data.
+        start(self): Starts the detection process.
+        update_buffer(self, new_data): Updates the sliding window buffer with new data.
+        clear_message_buffer(self): Clears the message data buffer.
+    """
+
     def __init__(self, demodulator, decoder):
+        """
+        Initializes the HearmeDetector object.
+
+        Args:
+            demodulator (Demodulator): The demodulator object used for demodulation.
+            decoder (Decoder): The decoder object used for decoding.
+        """
         self.demodulator = demodulator
         self.decoder = decoder
-        self.decoder.compression_enabled = False
-        self.demodulator.bit_duration = 0.05  # 500 ms bit duration
-        self.demodulator.carrier_freq = 16000  # 16 kHz carrier frequency
-        self.demodulator.bandwidth = 4400  # 8.8 kHz bandwidth
         self.chunk_size = 1024 # Number of audio samples per read
-        self.demodulator.sample_rate = 44100  # Audio sample rate
-        self.demodulator.m_for_mfsk = 64  # MFSK modulation order
         self.format = pyaudio.paInt16  # Audio format (16-bit)
         self.channels = 1  # Number of audio channels (mono)
         self.rate = demodulator.sample_rate  # Sampling rate
@@ -33,10 +65,21 @@ class HearmeDetector:
         print("Hearme Listener Module. Liang Sidi, 2024.")
 
     def apply_filter(self, data):
-        """Apply the designed bandpass filter to the data."""
+        """
+        Apply the designed bandpass filter to the data.
+
+        Args:
+            data (numpy.ndarray): The input audio data.
+
+        Returns:
+            numpy.ndarray: The filtered audio data.
+        """
         return scipy.signal.lfilter(self.b, self.a, data)
 
     def start(self):
+        """
+        Start the detection process.
+        """
         audio = pyaudio.PyAudio()
         stream = audio.open(format=self.format, channels=self.channels,
                             rate=self.rate, input=True,
@@ -79,20 +122,19 @@ class HearmeDetector:
             audio.terminate()
 
     def update_buffer(self, new_data):
-        """Update the sliding window buffer with new data."""
+        """
+        Update the sliding window buffer with new data.
+
+        Args:
+            new_data (numpy.ndarray): The new data to be added to the buffer.
+        """
         # Shift the existing data to the left
         self.sliding_window[:-len(new_data)] = self.sliding_window[len(new_data):]
         # Append new data to the end of the window
         self.sliding_window[-len(new_data):] = new_data
 
     def clear_message_buffer(self):
+        """
+        Clear the message data buffer.
+        """
         self.message_data = np.array([])
-
-
-
-
-# Example usage
-demodulator = Demodulator()  # Initialize demodulator with appropriate settings
-decoder = Decoder()
-real_time_demod = HearmeDetector(demodulator, decoder)
-real_time_demod.start()

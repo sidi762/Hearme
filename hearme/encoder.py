@@ -1,4 +1,5 @@
-"""The encoder module, responsible for encoding text to carrier audio signals.
+"""
+The encoder module, responsible for encoding text to carrier audio signals.
 Liang Sidi, 2024
 """
 import wave
